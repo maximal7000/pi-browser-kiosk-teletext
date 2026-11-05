@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<title>Pi-Anzeige</title>
+<link rel="preload" href="/fonts/bedstead.otf" as="font" type="font/otf" crossorigin>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="wrap hrow">
+      <span class="pnum" id="pnum">P---</span>
+      <span class="brand">PI-ANZEIGE</span>
+      <span class="conn" id="conn" role="status">VERBINDE …</span>
+      <span class="date" id="date"></span>
+      <span class="clock" id="clock"></span>
+    </div>
+    <canvas class="mosaic" id="mosaic" aria-hidden="true"></canvas>
+  </header>
+
+  <main class="wrap">
+    <section class="screen-col" aria-label="Bildschirm">
+      <div class="now">
+        <span class="lbl">JETZT</span>
+        <span class="name" id="nowName">Startseite</span>
+        <span class="url" id="nowUrl"></span>
+      </div>
+      <div class="frame" id="frame">
+        <div class="frame-msg" id="frameMsg">VORSCHAU STARTET …</div>
+        <div class="blackout"><span>SCHWARZ AKTIV</span></div>
+      </div>
+      <div class="meta">
+        <span class="live" id="live"><i></i><span id="liveText">LIVE</span></span>
+        <span id="lastFrame">Noch kein Bild</span>
+        <span id="resolution"></span>
+        <button class="textbtn" id="pauseBtn" type="button">Vorschau pausieren</button>
+      </div>
+    </section>
+
+    <aside>
+      <section class="sec" aria-labelledby="idxH">
+        <h2 id="idxH">SEITEN <small>Ziffern tippen: 101–199</small></h2>
+        <ul class="index" id="index"></ul>
+      </section>
+
+      <section class="sec pageform" id="pageForm" hidden aria-labelledby="formH">
+        <h2 id="formH">SEITE SPEICHERN</h2>
+        <div class="field"><label for="formName">Name</label><input type="text" id="formName" maxlength="60" placeholder="z. B. Abfahrten" autocomplete="off"></div>
+        <div class="field"><label for="formUrl">Adresse</label><input type="url" id="formUrl" autocomplete="off"></div>
+        <div class="field narrow" id="formNumberField"><label for="formNumber">Seitennummer</label><input type="number" id="formNumber" min="101" max="199" inputmode="numeric"></div>
+        <span class="err" id="formErr" hidden></span>
+        <div class="inline">
+          <button class="btn green" type="button" id="formSave">Speichern</button>
+          <button class="textbtn" type="button" id="formCancel">Abbrechen</button>
+          <button class="textbtn danger" type="button" id="formDelete" hidden>Löschen</button>
+        </div>
+        <div class="confirm" id="formDeleteConfirm" hidden>
+          <span>Wirklich löschen?</span>
+          <button class="btn red" type="button" id="formDeleteYes">Ja, löschen</button>
+          <button class="textbtn" type="button" id="formDeleteNo">Abbrechen</button>
+        </div>
+      </section>
+
+      <section class="sec" aria-labelledby="urlH">
+        <h2 id="urlH">ADRESSE</h2>
+        <form class="field" id="urlForm" novalidate>
+          <label for="url">Beliebige Website anzeigen</label>
+          <div class="inline">
+            <input type="url" id="url" placeholder="https://…" autocomplete="off">
+            <button class="btn" type="submit">Anzeigen</button>
+          </div>
+          <span class="err" id="urlErr" hidden></span>
+        </form>
+      </section>
+
+      <section class="sec" aria-labelledby="zoomH">
+        <h2 id="zoomH">ZOOM</h2>
+        <div class="zoom">
+          <button class="step" type="button" id="zMinus" aria-label="Verkleinern">−</button>
+          <input type="range" id="zoom" min="25" max="300" step="5" value="100" aria-label="Zoomstufe">
+          <button class="step" type="button" id="zPlus" aria-label="Vergrößern">+</button>
+          <output id="zOut" for="zoom">100 %</output>
+        </div>
+        <div class="savezoom" id="saveZoomRow" hidden>
+          <span>Gespeichert für diese Seite: <span id="savedZoom"></span></span>
+          <button class="textbtn" type="button" id="saveZoom">Zoom übernehmen</button>
+        </div>
+        <span class="err" id="zoomErr" hidden></span>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="keys">
+    <div class="wrap fastext" role="toolbar" aria-label="Schnelltasten">
+      <button class="fk red" id="kBlack" type="button" aria-pressed="false"><span id="kBlackLbl">SCHWARZ</span><kbd>B</kbd></button>
+      <button class="fk green" id="kSave" type="button"><span>SPEICHERN</span><kbd>S</kbd></button>
+      <button class="fk yellow" id="kZoom" type="button"><span>ZOOM 100 %</span><kbd>0</kbd></button>
+      <button class="fk blue" id="kReload" type="button"><span>NEU LADEN</span><kbd>R</kbd></button>
+    </div>
+  </footer>
+  <div class="sr" role="status" id="announce"></div>
+</div>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

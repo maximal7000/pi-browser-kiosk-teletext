@@ -62,7 +62,7 @@ Runtime dependencies: Node.js ≥ 20 and the npm package `ws`. Everything else i
 `Page.navigate`. Chromium is not restarted. Only `http:` and `https:` are accepted; other schemes are rejected.
 
 ### Zoom
-Behaves like browser zoom (layout is recomputed): `Emulation.setDeviceMetricsOverride` with `width = screenWidth / z`, `height = screenHeight / z`, `deviceScaleFactor = z`. Range 25 %–300 %, 5 % steps. Screen size is read on connect via `Runtime.evaluate(screen.width/height)`. Zoom belongs to what is currently shown; choosing a saved page applies its zoom. When the zoom is changed while a saved page is showing, the panel offers "Zoom übernehmen" to store it on that page.
+Behaves like browser zoom (layout is recomputed): CSS `zoom` on the top-level document's root element, injected via `Page.addScriptToEvaluateOnNewDocument` + `Runtime.evaluate` so it survives navigation. (Device-metrics emulation was tried first; on a real screen it only fills a corner.) Range 25 %–300 %, 5 % steps. Screen size is read on connect (window bounds) for the preview's aspect ratio. Zoom belongs to what is currently shown; choosing a saved page applies its zoom. When the zoom is changed while a saved page is showing, the panel offers "Zoom übernehmen" to store it on that page.
 
 ### Black
 Via `Page.addScriptToEvaluateOnNewDocument` plus an immediate `Runtime.evaluate`, a full-viewport black element (closed shadow root, maximum `z-index`) is inserted or removed. It survives reloads and navigation. The page keeps running underneath. The preview then shows black (the screen is the truth), labelled "SCHWARZ AKTIV".
