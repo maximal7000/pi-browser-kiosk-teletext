@@ -329,6 +329,63 @@ async function deleteFromForm() {
   }
 }
 
+/* ---------- remote input on the live image ---------- */
+
+// Tab is not forwarded: it moves focus out of the live image (no keyboard trap).
+const SPECIAL_KEYS = new Set(['Enter', 'Backspace', 'Delete', 'Escape', 'ArrowUp', 'ArrowDown',
+  'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+
+function sendInput(msg) {
+  if (socketUp) ws.send(JSON.stringify({ type: 'input', ...msg }));
+}
+
+// The part of the frame the contained image really covers (excludes letterbox bars).
+function imageRect() {
+  const img = $('frameImg');
+  if (!img || !img.naturalWidth) return null;
+  const box = $('frame').getBoundingClientRect();
+  const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+  const width = img.naturalWidth * scale;
+  const height = img.naturalHeight * scale;
+  return { left: box.left + (box.width - width) / 2, top: box.top + (box.height - height) / 2, width, height };
+}
+
+function toImage(e) {
+  const r = imageRect();
+  if (!r) return null;
+  const x = (e.clientX - r.left) / r.width;
+  const y = (e.clientY - r.top) / r.height;
+  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+}
+
+$('frame').addEventListener('click', (e) => {
+  const p = toImage(e);
+  if (p) sendInput({ kind: 'click', ...p });
+});
+$('frame').addEventListener('wheel', (e) => {
+  const p = toImage(e);
+  if (!p) return;
+  e.preventDefault();
+  const factor = e.deltaMode === 1 ? 40 : 1;
+  sendInput({ kind: 'wheel', ...p, dx: e.deltaX * factor, dy: e.deltaY * factor });
+}, { passive: false });
+$('frame').addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.ctrlKey || e.metaKey || e.altKey) return; // Ctrl+V arrives as a paste event
+  if (SPECIAL_KEYS.has(e.key)) {
+    e.preventDefault();
+    sendInput({ kind: 'key', key: e.key });
+  } else if (e.key.length === 1) {
+    e.preventDefault();
+    sendInput({ kind: 'text', text: e.key });
+  }
+});
+$('frame').addEventListener('paste', (e) => {
+  e.preventDefault();
+  const text = (e.clipboardData?.getData('text') ?? '').slice(0, 2000);
+  if (text) sendInput({ kind: 'text', text });
+});
+
 /* ---------- events ---------- */
 
 $('index').addEventListener('click', (e) => {
