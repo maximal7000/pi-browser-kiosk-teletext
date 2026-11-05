@@ -64,6 +64,10 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px)
 .now .url { color: var(--dim); font: 13px var(--ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .frame { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: var(--ink); border: 1px solid var(--rule); overflow: hidden; }
 .frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.frame { cursor: pointer; }
+.frame:focus { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.frame-hint { position: absolute; right: 8px; bottom: 8px; display: none; background: var(--yellow); color: var(--ink); font: 14px var(--tt); letter-spacing: 0.06em; padding: 2px 8px; pointer-events: none; }
+.frame:focus .frame-hint { display: block; }
 .frame-msg { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--tt); color: var(--dim); font-size: 16px; letter-spacing: 0.08em; text-align: center; padding: var(--s3); }
 .blackout { position: absolute; inset: 0; background: var(--ink); display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity 280ms var(--ease); }
 .blackout span { font-family: var(--tt); color: var(--red); font-size: 18px; letter-spacing: 0.08em; }

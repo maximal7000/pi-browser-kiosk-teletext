@@ -196,3 +196,36 @@ test('choosing the shown page again brings it back after the site navigated away
   await store.show({ pageId: page.id });
   await waitFor(async () => (await evaluate(cdp, 'document.body.textContent')) === 'white', { label: 'back to white' });
 });
+
+test('the mouse cursor is hidden on every shown page, also after navigation', async () => {
+  const { store, cdp, display } = await setup();
+  await waitFor(() => display.status().connected, { label: 'connected' });
+  await store.show({ url: WHITE });
+  await waitFor(async () => (await evaluate(cdp, 'document.body.textContent')) === 'white', { label: 'white' });
+  await waitFor(async () => (await evaluate(cdp, 'getComputedStyle(document.body).cursor')) === 'none', { label: 'cursor hidden' });
+  await store.show({ url: OTHER });
+  await waitFor(async () => (await evaluate(cdp, 'document.body.textContent')) === 'other', { label: 'other' });
+  await waitFor(async () => (await evaluate(cdp, 'getComputedStyle(document.body).cursor')) === 'none', { label: 'cursor hidden after navigation' });
+});
+
+test('a failing cursor-hiding call does not block restoring the page', async () => {
+  const { EventEmitter } = await import('node:events');
+  const dir = await mkdtemp(join(tmpdir(), 'pi-anzeige-display-'));
+  const store = await createStore({ file: join(dir, 'config.json') });
+  await store.show({ url: WHITE });
+  const cdp = new EventEmitter();
+  cdp.connected = true;
+  const calls = [];
+  cdp.send = async (method, params) => {
+    calls.push(method);
+    if (method === 'Runtime.evaluate' && params.expression.includes('cursor')) throw new Error('Execution context was destroyed');
+    if (method === 'Page.addScriptToEvaluateOnNewDocument' && params.source.includes('cursor')) throw new Error('timed out');
+    if (method === 'Target.getTargetInfo') return { targetInfo: { targetId: 't' } };
+    if (method === 'Browser.getWindowForTarget') return { bounds: { width: 1920, height: 1080 } };
+    if (method === 'Page.addScriptToEvaluateOnNewDocument') return { identifier: '1' };
+    return {};
+  };
+  const display = createDisplay({ cdp, store, startUrl: START });
+  cdp.emit('connected');
+  await waitFor(() => display.status().connected && calls.includes('Page.navigate'), { label: 'restored', timeout: 3000 });
+});

@@ -79,7 +79,7 @@ export function hostAllowed(hostHeader, hostname) {
   return ['localhost', own, `${own}.local`].includes(host);
 }
 
-export function createServer({ store, display, preview, publicDir, pingInterval = 15000, info = () => ({}), hostname = 'anzeige' }) {
+export function createServer({ store, display, preview, publicDir, pingInterval = 15000, info = () => ({}), hostname = 'anzeige', input = null }) {
   const root = resolve(publicDir);
   const snapshot = () => ({ state: store.get(), display: display.status() });
 
@@ -174,7 +174,7 @@ export function createServer({ store, display, preview, publicDir, pingInterval 
   const wss = new WebSocketServer({
     server,
     path: '/live',
-    maxPayload: 4096,
+    maxPayload: 16 * 1024, // a 2000-character paste can be ~12 KB of escaped UTF-8
     // Browsers allow cross-origin WebSockets, so another website must not watch the screen.
     verifyClient: ({ req }, done) => {
       let ok = hostAllowed(req.headers.host, hostname);
@@ -215,6 +215,13 @@ export function createServer({ store, display, preview, publicDir, pingInterval 
       try {
         msg = JSON.parse(data.toString());
       } catch {
+        return;
+      }
+      if (msg?.type === 'input') {
+        if (!input) return;
+        input.handle(msg)
+          .then((done) => { if (done) preview.boost(); })
+          .catch((err) => console.warn(`input: ${err.message}`));
         return;
       }
       if (msg?.type !== 'preview') return;

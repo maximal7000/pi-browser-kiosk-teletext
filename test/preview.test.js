@@ -157,3 +157,25 @@ test('a screencast start refused mid-navigation is retried', async () => {
   assert.ok(cdp.count('Page.startScreencast') >= 2, 'screencast start retried');
   assert.deepEqual(got, ['seed']);
 });
+
+test('boost raises the frame cap for a while, then throttles again', async () => {
+  const cdp = fakeCdp();
+  const preview = createPreview({ cdp, maxFps: 2, boostFps: 5 });
+  const got = [];
+  preview.addViewer('a', (buf) => got.push(buf.toString()));
+  await sleep(600); // let the seed frame's send slot pass
+  got.length = 0;
+  preview.boost(700);
+  cdp.emit('Page.screencastFrame', frame(1));
+  await sleep(250);
+  cdp.emit('Page.screencastFrame', frame(2));
+  await sleep(10);
+  assert.deepEqual(got, ['frame1', 'frame2'], 'both frames sent at once while boosted');
+  await sleep(600);
+  got.length = 0;
+  cdp.emit('Page.screencastFrame', frame(3));
+  await sleep(250);
+  cdp.emit('Page.screencastFrame', frame(4));
+  await sleep(10);
+  assert.deepEqual(got, ['frame3'], 'throttled again after the boost window');
+});

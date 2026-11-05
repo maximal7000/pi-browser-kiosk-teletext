@@ -26,6 +26,20 @@ const BLACK_ON = `(() => {
   else new MutationObserver((_, obs) => { if (add()) { obs.disconnect(); keep(); } }).observe(document, { childList: true });
 })()`;
 
+// cage shows the pointer whenever a mouse or touch device exists; the page decides
+// what it looks like, so hide it in every frame of every document.
+const HIDE_CURSOR = `(() => {
+  const add = () => {
+    const root = document.head || document.documentElement;
+    if (!root) return false;
+    const style = document.createElement('style');
+    style.textContent = '*, *::before, *::after { cursor: none !important; }';
+    root.appendChild(style);
+    return true;
+  };
+  if (!add()) new MutationObserver((_, obs) => { if (add()) obs.disconnect(); }).observe(document, { childList: true });
+})()`;
+
 const BLACK_OFF = `window[${JSON.stringify(OVERLAY_ID)}] = false; document.getElementById(${JSON.stringify(OVERLAY_ID)})?.remove()`;
 
 // CSS zoom relayouts like browser zoom and, unlike device-metrics emulation,
@@ -153,6 +167,9 @@ export function createDisplay({ cdp, store, startUrl, retryDelays = [30000, 6000
     enqueue(async () => {
       await cdp.send('Page.enable');
       await cdp.send('Inspector.enable').catch(() => {});
+      // Cosmetic: a failure here must never stop restoring the page.
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: HIDE_CURSOR }).catch(() => {});
+      await cdp.send('Runtime.evaluate', { expression: HIDE_CURSOR }).catch(() => {});
       setStatus({ connected: true, screen: await readScreen() });
       await sync({ force: true });
     });

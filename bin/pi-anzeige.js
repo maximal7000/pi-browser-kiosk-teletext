@@ -8,6 +8,7 @@ import { createStore } from '../src/state.js';
 import { createDisplay } from '../src/display.js';
 import { createPreview } from '../src/preview.js';
 import { createServer } from '../src/server.js';
+import { createInput } from '../src/input.js';
 
 const PORT = Number(process.env.PORT ?? 80);
 const DATA = process.env.PI_ANZEIGE_DATA ?? '/var/lib/pi-anzeige/config.json';
@@ -27,7 +28,8 @@ const store = await createStore({ file: DATA });
 const cdp = new Cdp({ host: CDP_HOST, port: CDP_PORT });
 const display = createDisplay({ cdp, store, startUrl: `http://127.0.0.1:${PORT}/start` });
 const preview = createPreview({ cdp });
-const server = createServer({ store, display, preview, publicDir, info, hostname: hostname() });
+const input = createInput({ cdp });
+const server = createServer({ store, display, preview, publicDir, info, hostname: hostname(), input });
 
 cdp.on('connected', () => console.log('chromium connected'));
 cdp.on('disconnected', () => console.log('chromium disconnected, reconnecting'));

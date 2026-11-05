@@ -53,7 +53,7 @@ async function waitForPortFile(dir, timeoutMs = 15000) {
   throw new Error('Chromium did not report a DevTools port');
 }
 
-export async function launchChromium({ width = 1280, height = 720, port = 0 } = {}) {
+export async function launchChromium({ width = 1280, height = 720, port = 0, scrollbars = false } = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'pi-anzeige-chromium-'));
   let proc;
   let activePort = port;
@@ -73,7 +73,7 @@ export async function launchChromium({ width = 1280, height = 720, port = 0 } = 
       '--disable-gpu',
       '--disable-background-networking',
       '--disable-component-update',
-      '--hide-scrollbars',
+      ...(scrollbars ? [] : ['--hide-scrollbars']),
       'about:blank',
     ], { stdio: 'ignore' });
     activePort = activePort ? await waitForHttp(activePort) : await waitForPortFile(dataDir);

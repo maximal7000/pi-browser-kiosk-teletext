@@ -11,6 +11,8 @@ The control panel is in German and styled like teletext: type a page number (101
 - `cage` runs Chromium full-screen on the Pi with the DevTools protocol bound to `127.0.0.1:9222`.
 - A small Node.js server (`bin/pi-anzeige.js`) keeps Chromium on the chosen URL, zoom and black state, stores everything in `/var/lib/pi-anzeige/config.json`, and serves the panel on port 80.
 - The live preview uses Chromium's screencast and stops as soon as no panel is watching.
+- The live preview is also a remote control: clicks, scrolling and typing in it go to the page on the Pi. The Pi's touchscreen works directly; the mouse cursor is hidden.
+- A managed Chromium policy (`deploy/chromium-policy.json`) turns off translation offers, password/autofill bubbles and permission prompts on the kiosk.
 
 Design and decisions: [`docs/superpowers/specs/2026-11-05-pi-anzeige-design.md`](docs/superpowers/specs/2026-11-05-pi-anzeige-design.md).
 
