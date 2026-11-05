@@ -13,6 +13,7 @@ done
 
 exec "$BROWSER" \
   --kiosk \
+  --lang=de \
   --ozone-platform=wayland \
   --noerrdialogs \
   --disable-infobars \

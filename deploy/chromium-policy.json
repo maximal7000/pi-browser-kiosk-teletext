@@ -1,0 +1,13 @@
+{
+  "TranslateEnabled": false,
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "DefaultNotificationsSetting": 2,
+  "DefaultGeolocationSetting": 2,
+  "DefaultBrowserSettingEnabled": false,
+  "BrowserSignin": 0,
+  "SpellcheckEnabled": false,
+  "MetricsReportingEnabled": false,
+  "PromotionalTabsEnabled": false
+}

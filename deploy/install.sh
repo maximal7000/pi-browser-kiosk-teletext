@@ -56,6 +56,14 @@ rsync -a --delete \
 (cd "$APP_DIR" && npm ci --omit=dev --no-audit --no-fund)
 chmod +x "$APP_DIR/deploy/chromium-kiosk.sh"
 
+say "Chromium-Einblendungen abschalten"
+install -d /etc/chromium/policies/managed
+install -m 0644 "$APP_DIR/deploy/chromium-policy.json" /etc/chromium/policies/managed/pi-anzeige.json
+if [[ -d /etc/chromium-browser ]]; then
+  install -d /etc/chromium-browser/policies/managed
+  install -m 0644 "$APP_DIR/deploy/chromium-policy.json" /etc/chromium-browser/policies/managed/pi-anzeige.json
+fi
+
 say "Dienste einrichten"
 install -m 0644 "$APP_DIR/deploy/pam-kiosk" /etc/pam.d/pi-anzeige-kiosk
 install -m 0644 "$APP_DIR/deploy/pi-anzeige.service" /etc/systemd/system/pi-anzeige.service
