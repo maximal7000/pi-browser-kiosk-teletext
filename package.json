@@ -1,0 +1,19 @@
+{
+  "name": "pi-anzeige",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remote-controlled full-screen web display for a Raspberry Pi, with a teletext-style control panel.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node bin/pi-anzeige.js",
+    "test": "node --test --test-concurrency=1 test/"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  },
+  "license": "MIT"
+}
