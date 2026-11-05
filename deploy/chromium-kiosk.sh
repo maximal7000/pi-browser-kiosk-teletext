@@ -19,6 +19,7 @@ exec "$BROWSER" \
   --no-first-run \
   --no-default-browser-check \
   --disable-session-crashed-bubble \
+  --hide-crash-restore-bubble \
   --disable-features=Translate,TranslateUI \
   --disable-pinch \
   --overscroll-history-navigation=0 \

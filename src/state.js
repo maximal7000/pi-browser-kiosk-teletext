@@ -95,13 +95,13 @@ export async function createStore({ file }) {
   }
 
   // Every mutation runs on one promise chain so writes never interleave.
-  function write(mutate) {
+  function write(mutate, meta = {}) {
     const run = queue.then(async () => {
       const draft = copy();
       const result = mutate(draft);
       state = draft;
       await persist();
-      emitter.emit('change', copy());
+      emitter.emit('change', copy(), meta);
       return result;
     });
     queue = run.catch(() => {});
@@ -130,7 +130,7 @@ export async function createStore({ file }) {
           };
         }
         return structuredClone(draft);
-      });
+      }, { reason: 'show' });
     },
 
     setZoom(z) {
@@ -186,6 +186,10 @@ export async function createStore({ file }) {
           }
           page.number = number;
           draft.pages.sort((a, b) => a.number - b.number);
+        }
+        if (draft.current.pageId === page.id) {
+          draft.current.url = page.url;
+          draft.current.zoom = page.zoom;
         }
         return { ...page };
       });

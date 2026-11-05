@@ -147,3 +147,22 @@ test('change fires once per write with the new state', async () => {
   assert.equal(seen[1].current.zoom, 2);
   assert.equal(seen[1].black, true);
 });
+
+test('editing the shown page updates what is shown', async () => {
+  const { file } = await tempFile();
+  const store = await createStore({ file });
+  const p = await store.addPage({ name: 'A', url: 'https://a.de' });
+  await store.show({ pageId: p.id });
+  await store.updatePage(p.id, { url: 'https://b.de', zoom: 1.5 });
+  assert.deepEqual(store.get().current, { url: 'https://b.de/', zoom: 1.5, pageId: p.id });
+});
+
+test('show emits change with reason show', async () => {
+  const { file } = await tempFile();
+  const store = await createStore({ file });
+  const reasons = [];
+  store.on('change', (_, meta) => reasons.push(meta?.reason));
+  await store.show({ url: 'https://a.de' });
+  await store.setBlack(true);
+  assert.deepEqual(reasons, ['show', undefined]);
+});

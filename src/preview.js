@@ -39,6 +39,7 @@ export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60 })
     generation += 1;
     clearTimeout(trailingTimer);
     trailingTimer = null;
+    if (pending) ack(pending.sessionId);
     pending = null;
     if (!cdp.connected) return;
     cdp.send('Page.stopScreencast').catch(warn);
@@ -49,25 +50,31 @@ export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60 })
     for (const send of viewers.values()) send(buf);
   }
 
+  const ack = (sessionId) => cdp.send('Page.screencastFrameAck', { sessionId }).catch(warn);
+
+  // Chromium waits for an ack before it captures the next frame, so holding the
+  // ack until the next send slot keeps the Pi from encoding frames nobody sees.
   cdp.on('Page.screencastFrame', ({ data, sessionId }) => {
-    cdp.send('Page.screencastFrameAck', { sessionId }).catch(warn);
     generation += 1; // a real frame makes any in-flight seed stale
     const buf = Buffer.from(data, 'base64');
     lastFrame = buf;
     api.lastFrameAt = Date.now();
-    if (viewers.size === 0) return;
     const wait = lastSentAt + interval - Date.now();
-    if (wait <= 0 && !trailingTimer) {
-      broadcast(buf);
+    if (viewers.size === 0 || (wait <= 0 && !trailingTimer)) {
+      if (viewers.size > 0) broadcast(buf);
+      ack(sessionId);
       return;
     }
-    // Inside the throttle window: keep only the newest frame and send it at the end.
-    pending = buf;
+    if (pending) ack(pending.sessionId); // superseded before it was sent
+    pending = { buf, sessionId };
     if (!trailingTimer) {
       trailingTimer = setTimeout(() => {
         trailingTimer = null;
-        if (pending && viewers.size > 0) broadcast(pending);
+        const next = pending;
         pending = null;
+        if (!next) return;
+        if (viewers.size > 0) broadcast(next.buf);
+        ack(next.sessionId);
       }, Math.max(wait, 0));
     }
   });

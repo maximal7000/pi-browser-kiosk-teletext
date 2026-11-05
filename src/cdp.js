@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 
 export class Cdp extends EventEmitter {
-  constructor({ host = '127.0.0.1', port = 9222, minBackoff = 1000, maxBackoff = 10000 } = {}) {
+  constructor({ host = '127.0.0.1', port = 9222, minBackoff = 1000, maxBackoff = 10000, commandTimeout = 15000 } = {}) {
     super();
     this.host = host;
     this.port = port;
@@ -16,6 +16,13 @@ export class Cdp extends EventEmitter {
     this.running = false;
     this.timer = null;
     this.backoff = minBackoff;
+    this.commandTimeout = commandTimeout;
+    this.targetId = null;
+    this.on('Target.targetCreated', ({ targetInfo }) => {
+      if (targetInfo.type === 'page' && targetInfo.targetId !== this.targetId) {
+        this.send('Target.closeTarget', { targetId: targetInfo.targetId }).catch(() => {});
+      }
+    });
   }
 
   start() {
@@ -40,7 +47,13 @@ export class Cdp extends EventEmitter {
     if (!this.connected || !this.ws) return Promise.reject(new Error('not connected'));
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, method });
+      // A dialog or a hung renderer must never stall every later command.
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`${method} timed out`));
+      }, this.commandTimeout);
+      const done = (fn) => (value) => { clearTimeout(timer); fn(value); };
+      this.pending.set(id, { resolve: done(resolve), reject: done(reject), method });
       this.ws.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -50,12 +63,30 @@ export class Cdp extends EventEmitter {
   }
 
   async #pageTarget() {
-    const res = await fetch(`${this.#base()}/json/list`);
-    const targets = await res.json();
-    const page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
-    if (page) return page.webSocketDebuggerUrl;
-    const created = await fetch(`${this.#base()}/json/new?about:blank`, { method: 'PUT' });
-    return (await created.json()).webSocketDebuggerUrl;
+    const signal = AbortSignal.timeout(5000);
+    const res = await fetch(`${this.#base()}/json/list`, { signal });
+    const targets = (await res.json()).filter((t) => t.type === 'page' && t.webSocketDebuggerUrl);
+    // Stay on the tab we controlled before; /json/list is ordered by recent activity.
+    const page = targets.find((t) => t.id === this.targetId) ?? targets[0];
+    if (page) {
+      this.targetId = page.id;
+      return page.webSocketDebuggerUrl;
+    }
+    const created = await (await fetch(`${this.#base()}/json/new?about:blank`, { method: 'PUT', signal })).json();
+    this.targetId = created.id;
+    return created.webSocketDebuggerUrl;
+  }
+
+  // The kiosk shows one tab. Popups and new tabs would cover it, so close them.
+  async #closeOtherTabs() {
+    await this.send('Target.setDiscoverTargets', { discover: true });
+    const { targetInfos } = await this.send('Target.getTargets');
+    for (const t of targetInfos) {
+      if (t.type === 'page' && t.targetId !== this.targetId) {
+        await this.send('Target.closeTarget', { targetId: t.targetId }).catch(() => {});
+      }
+    }
+    await this.send('Page.bringToFront').catch(() => {});
   }
 
   #scheduleReconnect() {
@@ -80,6 +111,7 @@ export class Cdp extends EventEmitter {
     ws.on('open', () => {
       this.connected = true;
       this.backoff = this.minBackoff;
+      this.#closeOtherTabs().catch(() => {});
       this.emit('connected');
     });
     ws.on('message', (data) => this.#onMessage(data));

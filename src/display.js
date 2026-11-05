@@ -5,6 +5,7 @@ const OVERLAY_ID = '__pi_anzeige_black';
 
 // Runs in every new document while black is on, and once on the current one.
 const BLACK_ON = `(() => {
+  if (window !== window.top) return; // the top-level overlay already covers iframes
   const id = ${JSON.stringify(OVERLAY_ID)};
   window[id] = true;
   const add = () => {
@@ -27,13 +28,20 @@ const BLACK_ON = `(() => {
 
 const BLACK_OFF = `window[${JSON.stringify(OVERLAY_ID)}] = false; document.getElementById(${JSON.stringify(OVERLAY_ID)})?.remove()`;
 
-export function zoomMetrics({ width, height }, zoom) {
-  return {
-    width: Math.round(width / zoom),
-    height: Math.round(height / zoom),
-    deviceScaleFactor: zoom,
-    mobile: false,
+// CSS zoom relayouts like browser zoom and, unlike device-metrics emulation,
+// changes what the physical screen shows (emulation only fills a corner of it).
+export function zoomScript(zoom) {
+  return `(() => {
+  if (window !== window.top) return;
+  const set = () => {
+    const root = document.documentElement;
+    if (!root) return false;
+    if (${zoom} === 1) root.style.removeProperty('zoom');
+    else root.style.setProperty('zoom', '${zoom}', 'important');
+    return true;
   };
+  if (!set()) new MutationObserver((_, obs) => { if (set()) obs.disconnect(); }).observe(document, { childList: true });
+})()`;
 }
 
 export function createDisplay({ cdp, store, startUrl, retryDelays = [30000, 60000, 300000] }) {
@@ -41,6 +49,7 @@ export function createDisplay({ cdp, store, startUrl, retryDelays = [30000, 6000
   let status = { connected: cdp.connected, loading: false, error: null, screen: null };
   let applied = {};
   let blackScriptId = null;
+  let zoomScriptId = null;
   let retryTimer = null;
   let retryCount = 0;
   let chain = Promise.resolve();
@@ -86,9 +95,15 @@ export function createDisplay({ cdp, store, startUrl, retryDelays = [30000, 6000
 
   async function applyZoom(zoom) {
     applied.zoom = zoom;
-    if (!status.screen) return;
-    if (zoom === 1) await cdp.send('Emulation.clearDeviceMetricsOverride');
-    else await cdp.send('Emulation.setDeviceMetricsOverride', zoomMetrics(status.screen, zoom));
+    if (zoomScriptId) {
+      await cdp.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: zoomScriptId });
+      zoomScriptId = null;
+    }
+    const source = zoomScript(zoom);
+    if (zoom !== 1) {
+      zoomScriptId = (await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source })).identifier;
+    }
+    await cdp.send('Runtime.evaluate', { expression: source });
   }
 
   async function applyBlack(black) {
@@ -108,30 +123,59 @@ export function createDisplay({ cdp, store, startUrl, retryDelays = [30000, 6000
     }
   }
 
-  async function sync({ force = false } = {}) {
+  async function sync({ force = false, navigateAgain = false } = {}) {
     if (!cdp.connected) return;
     const { current, black } = store.get();
     const url = current.url ?? startUrl;
     // Black first so a new page never flashes before the overlay is in place.
     if (force || black !== applied.black) await applyBlack(black);
     if (force || current.zoom !== applied.zoom) await applyZoom(current.zoom);
-    if (force || url !== applied.url) await navigate(url);
+    if (force || navigateAgain || url !== applied.url) await navigate(url);
   }
 
   async function readScreen() {
-    const { targetInfo } = await cdp.send('Target.getTargetInfo');
-    const { bounds } = await cdp.send('Browser.getWindowForTarget', { targetId: targetInfo.targetId });
-    return { width: bounds.width, height: bounds.height };
+    try {
+      const { targetInfo } = await cdp.send('Target.getTargetInfo');
+      const { bounds } = await cdp.send('Browser.getWindowForTarget', { targetId: targetInfo.targetId });
+      return { width: bounds.width, height: bounds.height };
+    } catch {
+      const res = await cdp.send('Runtime.evaluate', {
+        expression: '({ width: screen.width, height: screen.height })', returnByValue: true,
+      });
+      return res.result.value;
+    }
   }
 
   cdp.on('connected', () => {
     applied = {};
     blackScriptId = null;
+    zoomScriptId = null;
     enqueue(async () => {
       await cdp.send('Page.enable');
+      await cdp.send('Inspector.enable').catch(() => {});
       setStatus({ connected: true, screen: await readScreen() });
       await sync({ force: true });
     });
+  });
+
+  // Nobody can click a dialog away on the kiosk; accept it so the page moves on.
+  cdp.on('Page.javascriptDialogOpening', () => {
+    cdp.send('Page.handleJavaScriptDialog', { accept: true }).catch(() => {});
+  });
+
+  // A renderer crash (e.g. out of memory on the Pi) leaves the debug socket open.
+  let lastCrash = 0;
+  cdp.on('Inspector.targetCrashed', () => {
+    setStatus({ error: 'Seite abgestürzt' });
+    const delay = Date.now() - lastCrash < 60000 ? 10000 : 1000;
+    lastCrash = Date.now();
+    // Navigate first: scripts cannot run in the dead renderer until a new page loads.
+    setTimeout(() => enqueue(async () => {
+      const { current, black } = store.get();
+      await navigate(current.url ?? startUrl);
+      await applyBlack(black);
+      await applyZoom(current.zoom);
+    }), delay);
   });
 
   cdp.on('disconnected', () => {
@@ -141,7 +185,8 @@ export function createDisplay({ cdp, store, startUrl, retryDelays = [30000, 6000
 
   cdp.on('Page.loadEventFired', () => setStatus({ loading: false }));
 
-  store.on('change', () => enqueue(() => sync()));
+  // Choosing a page again navigates even when it looks unchanged: the site may have moved on.
+  store.on('change', (_, meta) => enqueue(() => sync({ navigateAgain: meta?.reason === 'show' })));
 
   return Object.assign(emitter, {
     status: () => ({ ...status }),

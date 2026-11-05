@@ -23,7 +23,7 @@ after(async () => {
   await browser.close();
 });
 
-async function start({ pages = [] } = {}) {
+async function start({ pages = [], frameEvery = 0 } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'pi-anzeige-ui-'));
   const store = await createStore({ file: join(dir, 'config.json') });
   for (const p of pages) await store.addPage(p);
@@ -31,8 +31,14 @@ async function start({ pages = [] } = {}) {
   display.status = () => ({ connected: true, loading: false, error: null, screen: { width: 1920, height: 1080 } });
   display.reload = async () => {};
   const preview = { added: [], removed: [] };
-  preview.addViewer = (id, send) => { preview.added.push(id); send(FRAME); };
-  preview.removeViewer = (id) => { preview.removed.push(id); };
+  const timers = new Map();
+  preview.addViewer = (id, send) => {
+    preview.added.push(id);
+    send(FRAME);
+    if (frameEvery) timers.set(id, setInterval(() => send(FRAME), frameEvery));
+  };
+  preview.removeViewer = (id) => { preview.removed.push(id); clearInterval(timers.get(id)); };
+  cleanups.push(() => { for (const t of timers.values()) clearInterval(t); });
   const server = createServer({
     store, display, preview, publicDir: join(here, '..', 'public'),
     info: () => ({ hostname: 'anzeige', addresses: ['192.168.1.20'] }),
@@ -169,4 +175,15 @@ test('start page shows how to reach the control panel', async () => {
   await page.goto(base + '/start');
   await page.waitForFunction(() => document.body.textContent.includes('192.168.1.20'));
   assert.match(await page.textContent('body'), /http:\/\/anzeige\.local/);
+});
+
+test('live frames do not steal keyboard focus from the page list', async () => {
+  const { base } = await start({ pages: TWO_PAGES, frameEvery: 100 });
+  const { page } = await openPanel(base);
+  await page.waitForFunction(() => document.querySelectorAll('#index .row').length === 2);
+  await page.focus('[data-number="102"]');
+  await page.waitForTimeout(800);
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset?.number), '102');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelector('[data-number="102"]')?.getAttribute('aria-current') === 'true');
 });

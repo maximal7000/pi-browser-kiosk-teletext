@@ -58,14 +58,28 @@ test('starting the preview sends a seed screenshot scaled to maxWidth', async ()
   assert.deepEqual(got, ['seed']);
 });
 
-test('every frame is acknowledged once', async () => {
+const acks = (cdp) => cdp.calls.filter((c) => c.method === 'Page.screencastFrameAck').map((c) => c.params.sessionId);
+
+test('every frame is acknowledged exactly once', async () => {
   const cdp = fakeCdp();
-  const preview = createPreview({ cdp });
+  const preview = createPreview({ cdp, maxFps: 2 });
   preview.addViewer('a', () => {});
   for (let i = 1; i <= 3; i++) cdp.emit('Page.screencastFrame', frame(i));
-  await sleep(10);
-  const acks = cdp.calls.filter((c) => c.method === 'Page.screencastFrameAck').map((c) => c.params.sessionId);
-  assert.deepEqual(acks, [1, 2, 3]);
+  await sleep(600);
+  assert.deepEqual(acks(cdp).sort(), [1, 2, 3]);
+});
+
+test('a frame inside the throttle window is acknowledged only when it is sent', async () => {
+  const cdp = fakeCdp();
+  const preview = createPreview({ cdp, maxFps: 2 });
+  preview.addViewer('a', () => {});
+  cdp.emit('Page.screencastFrame', frame(1));
+  cdp.emit('Page.screencastFrame', frame(2));
+  await sleep(50);
+  // Holding the ack makes Chromium wait instead of encoding frames nobody sees.
+  assert.deepEqual(acks(cdp), [1]);
+  await sleep(550);
+  assert.deepEqual(acks(cdp), [1, 2]);
 });
 
 test('frames are throttled with a trailing newest frame', async () => {

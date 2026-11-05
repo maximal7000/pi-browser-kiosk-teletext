@@ -100,7 +100,8 @@ function onFrame(blob) {
   img.src = next;
   lastFrameAt = new Date();
   $('lastFrame').textContent = `Letztes Bild ${hms(lastFrameAt)}`;
-  render();
+  // Only the frame changed: re-rendering the list here would steal clicks and focus.
+  if (snapshot) renderScreen();
 }
 
 /* ---------- rendering ---------- */
@@ -118,7 +119,8 @@ function renderHeader() {
   let cls = '';
   if (!socketUp || !d?.connected) { text = 'VERBINDET NEU'; cls = 'warn'; }
   else if (d.error) { text = 'SEITE NICHT ERREICHBAR'; cls = 'bad'; }
-  conn.textContent = text;
+  // role="status" re-announces on every write, so only write real changes.
+  if (conn.textContent !== text) conn.textContent = text;
   conn.className = `conn ${cls}`;
   if (!seek) {
     const page = currentPage();
@@ -149,9 +151,15 @@ function renderScreen() {
   $('kBlackLbl').textContent = state.black ? 'LICHT AN' : 'SCHWARZ';
 }
 
+let indexKey = '';
 function renderIndex() {
   const { state } = snapshot;
   const list = $('index');
+  const key = JSON.stringify([state.pages, state.current.pageId]);
+  // Flags change without rebuilding, so a focused row keeps its focus.
+  for (const row of list.querySelectorAll('.row')) row.classList.toggle('flag', flagged.has(row.dataset.id));
+  if (key === indexKey) return;
+  indexKey = key;
   if (state.pages.length === 0) {
     list.innerHTML = '<li><span class="empty">Noch keine Seiten. Adresse eingeben und mit Grün speichern.</span></li>';
     return;

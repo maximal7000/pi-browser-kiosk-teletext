@@ -24,11 +24,16 @@ else
 fi
 
 node_major() { node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/'; }
-apt-get install -y nodejs npm || true
+apt_node_major() { apt-cache policy nodejs | sed -nE 's/^ *Candidate: ([0-9]+:)?([0-9]+).*/\2/p'; }
 if [[ "$(node_major || echo 0)" -lt 20 ]]; then
-  say "Node.js 20 aus dem NodeSource-Repository installieren"
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-  apt-get install -y nodejs
+  if [[ "$(apt_node_major || echo 0)" -ge 20 ]]; then
+    apt-get install -y nodejs npm
+  else
+    # Debian's npm drags in libnode-dev, which clashes with NodeSource's nodejs; NodeSource ships npm itself.
+    say "Node.js 20 aus dem NodeSource-Repository installieren"
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+  fi
 fi
 if [[ "$(node_major || echo 0)" -lt 20 ]]; then
   echo "Node.js 20 oder neuer wird benötigt, gefunden: $(node --version 2>/dev/null || echo keins)" >&2
