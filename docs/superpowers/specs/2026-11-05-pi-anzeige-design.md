@@ -24,7 +24,7 @@ A live preview shows the real picture on the screen, but only while at least one
 - Frontend plain HTML/CSS/JS, no build step; backend Node.js.
 - Look: **Teletext** (see section 6).
 - UI language German; code, comments, docs, commits and repo in English.
-- Code on GitHub: `maximal7000/pi-anzeige` (private).
+- Code on GitHub: `maximal7000/pi-browser-kiosk-teletext` (private).
 
 ### Not in v1
 
