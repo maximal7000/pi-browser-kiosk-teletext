@@ -363,6 +363,9 @@ $('frame').addEventListener('click', (e) => {
   if (p) sendInput({ kind: 'click', ...p });
 });
 $('frame').addEventListener('wheel', (e) => {
+  // Only after a click into the image: otherwise scrolling the panel past the
+  // preview would scroll the public display.
+  if (document.activeElement !== $('frame')) return;
   const p = toImage(e);
   if (!p) return;
   e.preventDefault();
@@ -371,7 +374,9 @@ $('frame').addEventListener('wheel', (e) => {
 }, { passive: false });
 $('frame').addEventListener('keydown', (e) => {
   e.stopPropagation();
-  if (e.ctrlKey || e.metaKey || e.altKey) return; // Ctrl+V arrives as a paste event
+  // Ctrl+V arrives as a paste event. AltGr reports Ctrl+Alt on Windows and Option is
+  // Alt on a Mac, and both produce characters like @ € { } that must reach the Pi.
+  if (e.metaKey || (e.ctrlKey && !e.altKey)) return;
   if (SPECIAL_KEYS.has(e.key)) {
     e.preventDefault();
     sendInput({ kind: 'key', key: e.key });

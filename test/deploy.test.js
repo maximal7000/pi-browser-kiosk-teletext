@@ -18,10 +18,26 @@ test('the chromium policy silences every browser prompt from the spec', async ()
     SpellcheckEnabled: false,
     MetricsReportingEnabled: false,
     PromotionalTabsEnabled: false,
+    ForcedLanguages: ['de-DE', 'de'],
+    AudioCaptureAllowed: false,
+    VideoCaptureAllowed: false,
+    DefaultClipboardSetting: 2,
+    DefaultWebUsbGuardSetting: 2,
+    DefaultSerialGuardSetting: 2,
+    DefaultWebHidGuardSetting: 2,
+    DefaultWebBluetoothGuardSetting: 2,
+    DefaultSensorsSetting: 2,
+    DefaultLocalFontsSetting: 2,
+    DefaultWindowManagementSetting: 2,
+    DefaultFileSystemWriteGuardSetting: 2,
+    DownloadRestrictions: 3,
   });
 });
 
 test('the kiosk starts Chromium in German and the installer installs the policy', async () => {
-  assert.match(await read('deploy/chromium-kiosk.sh'), /--lang=de/);
+  const kiosk = await read('deploy/chromium-kiosk.sh');
+  // --lang is ignored on Linux; Chromium takes its UI language from the environment.
+  assert.match(kiosk, /export LANGUAGE=de/);
+  assert.match(kiosk, /export LANG=de_DE\.UTF-8/);
   assert.match(await read('deploy/install.sh'), /\/etc\/chromium\/policies\/managed\/pi-anzeige\.json/);
 });

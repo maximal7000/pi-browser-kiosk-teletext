@@ -167,8 +167,9 @@ export function createDisplay({ cdp, store, startUrl, retryDelays = [30000, 6000
     enqueue(async () => {
       await cdp.send('Page.enable');
       await cdp.send('Inspector.enable').catch(() => {});
-      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: HIDE_CURSOR });
-      await cdp.send('Runtime.evaluate', { expression: HIDE_CURSOR });
+      // Cosmetic: a failure here must never stop restoring the page.
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: HIDE_CURSOR }).catch(() => {});
+      await cdp.send('Runtime.evaluate', { expression: HIDE_CURSOR }).catch(() => {});
       setStatus({ connected: true, screen: await readScreen() });
       await sync({ force: true });
     });

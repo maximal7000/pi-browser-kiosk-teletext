@@ -254,3 +254,31 @@ test('shortcuts work again after leaving the live image', async () => {
   await page.waitForFunction(() => document.querySelector('#kBlack').getAttribute('aria-pressed') === 'true');
   assert.equal(store.get().black, true);
 });
+
+test('AltGr characters like @ are typed on the Pi', async () => {
+  const { base, input } = await start();
+  const { page } = await openPanel(base);
+  const box = await frameBox(page);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.evaluate(() => {
+    const f = document.getElementById('frame');
+    f.dispatchEvent(new KeyboardEvent('keydown', { key: '@', ctrlKey: true, altKey: true, bubbles: true, cancelable: true }));
+    f.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, bubbles: true, cancelable: true }));
+  });
+  await until(() => input.messages.length >= 2, 'click + @');
+  await new Promise((r) => setTimeout(r, 100));
+  assert.deepEqual(input.messages.slice(1), [{ type: 'input', kind: 'text', text: '@' }]);
+});
+
+test('the mouse wheel only scrolls the Pi once the live image is focused', async () => {
+  const { base, input } = await start();
+  const { page } = await openPanel(base);
+  const box = await frameBox(page);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 200);
+  await new Promise((r) => setTimeout(r, 200));
+  assert.equal(input.messages.length, 0, 'wheel over an unfocused preview stays with the panel');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 200);
+  await until(() => input.messages.some((m) => m.kind === 'wheel'), 'wheel after focus');
+});

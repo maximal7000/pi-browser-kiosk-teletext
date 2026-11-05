@@ -5,6 +5,10 @@ set -euo pipefail
 START_URL="${START_URL:-http://127.0.0.1/start}"
 BROWSER="$(command -v chromium || command -v chromium-browser)"
 
+# --lang is ignored on Linux; Chromium takes its UI language from the environment.
+export LANGUAGE=de
+export LANG=de_DE.UTF-8
+
 # The server restores the last page over CDP; it only has to be reachable for the start page.
 for _ in $(seq 1 30); do
   curl -fsS -o /dev/null "$START_URL" && break
@@ -13,7 +17,6 @@ done
 
 exec "$BROWSER" \
   --kiosk \
-  --lang=de \
   --ozone-platform=wayland \
   --noerrdialogs \
   --disable-infobars \

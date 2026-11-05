@@ -304,3 +304,15 @@ test('a throwing input handler keeps the socket open', async () => {
   await waitFor(() => messages.some((m) => m.state?.black === true), 'still receiving');
   assert.equal(ws.readyState, ws.OPEN);
 });
+
+test('a long non-ASCII paste does not close the socket', async () => {
+  const input = fakeInput(true);
+  const { base } = await start({ input });
+  const { ws } = openWs(base);
+  await once(ws, 'open');
+  let closed = false;
+  ws.on('close', () => { closed = true; });
+  ws.send(JSON.stringify({ type: 'input', kind: 'text', text: '€'.repeat(2000) }));
+  await waitFor(() => input.messages.length === 1 || closed, 'handled or closed');
+  assert.equal(closed, false);
+});

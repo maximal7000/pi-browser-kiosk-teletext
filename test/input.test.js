@@ -24,8 +24,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const evaluate = async (cdp, expression) =>
   (await cdp.send('Runtime.evaluate', { expression, returnByValue: true })).result.value;
 
-async function setup() {
-  const chromium = await launchChromium({ width: 1280, height: 720 });
+async function setup({ scrollbars = false } = {}) {
+  const chromium = await launchChromium({ width: 1280, height: 720, scrollbars });
   cleanups.push(() => chromium.close());
   const cdp = new Cdp({ port: chromium.port, commandTimeout: 5000 });
   cleanups.push(() => cdp.stop());
@@ -96,4 +96,33 @@ test('input while Chromium is not connected is dropped quietly', async () => {
   const input = createInput({ cdp });
   assert.equal(await input.handle({ type: 'input', kind: 'click', x: 0.5, y: 0.5 }), false);
   assert.equal(await input.handle({ type: 'input', kind: 'text', text: 'x' }), false);
+});
+
+test('clicks near the right edge land correctly with a classic scrollbar', async () => {
+  const { cdp, input } = await setup({ scrollbars: true });
+  const [clientWidth, innerWidth] = await evaluate(cdp, '[document.documentElement.clientWidth, innerWidth]');
+  assert.ok(innerWidth - clientWidth >= 10, `expected a visible scrollbar (${innerWidth} vs ${clientWidth})`);
+  await evaluate(cdp, `const b = document.getElementById('b'); b.style.left = '${clientWidth - 40}px'; b.style.width = '20px'; true`);
+  const y = await viewportY(cdp, 350);
+  await input.handle({ type: 'input', kind: 'click', x: (clientWidth - 30) / (innerWidth - 1), y });
+  assert.equal(await evaluate(cdp, 'window.clicked === true'), true);
+});
+
+test('input is dispatched in order: text typed right after a click waits for it', async () => {
+  const { EventEmitter } = await import('node:events');
+  const cdp = new EventEmitter();
+  cdp.connected = true;
+  const calls = [];
+  cdp.send = async (method, params) => {
+    if (method === 'Runtime.evaluate') return { result: { value: [1000, 500] } };
+    if (method === 'Page.getLayoutMetrics') return { cssLayoutViewport: { clientWidth: 1000, clientHeight: 500 } };
+    if (params?.type === 'mousePressed') await sleep(100);
+    calls.push(params?.type ?? method);
+    return {};
+  };
+  const fast = createInput({ cdp });
+  const a = fast.handle({ type: 'input', kind: 'click', x: 0.5, y: 0.5 });
+  const b = fast.handle({ type: 'input', kind: 'text', text: 'x' });
+  await Promise.all([a, b]);
+  assert.deepEqual(calls, ['mouseMoved', 'mousePressed', 'mouseReleased', 'Input.insertText']);
 });

@@ -174,7 +174,7 @@ export function createServer({ store, display, preview, publicDir, pingInterval 
   const wss = new WebSocketServer({
     server,
     path: '/live',
-    maxPayload: 4096,
+    maxPayload: 16 * 1024, // a 2000-character paste can be ~12 KB of escaped UTF-8
     // Browsers allow cross-origin WebSockets, so another website must not watch the screen.
     verifyClient: ({ req }, done) => {
       let ok = hostAllowed(req.headers.host, hostname);

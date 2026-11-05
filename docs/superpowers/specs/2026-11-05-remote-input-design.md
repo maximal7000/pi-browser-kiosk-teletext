@@ -23,9 +23,10 @@ Chromium shows no browser prompts on the kiosk: no translation offer, no passwor
 
 ### Pointer
 - Panel sends normalized coordinates (`x`, `y` in 0–1 of the preview image area actually showing the frame, i.e. excluding letterbox bars).
-- Server maps them to CSS pixels of the Pi's layout viewport (`Page.getLayoutMetrics` → `cssLayoutViewport.clientWidth/clientHeight`, refreshed on connect and on every request when unknown) and dispatches `Input.dispatchMouseEvent`: `mouseMoved`, `mousePressed`, `mouseReleased` with `button: 'left'`, `clickCount: 1`.
+- Server maps them to the Pi's viewport including scrollbars (`innerWidth`/`innerHeight` of the top frame, read for every pointer event) and dispatches `Input.dispatchMouseEvent`: `mouseMoved`, `mousePressed`, `mouseReleased` with `button: 'left'`, `clickCount: 1`.
 - CSS zoom on the root element does not change the layout viewport, so mapping is zoom-independent.
-- Wheel: `Input.dispatchMouseEvent` `type: 'mouseWheel'` at the pointer position with `deltaX`/`deltaY` passed through (clamped to ±2000).
+- Input is dispatched through one queue, in arrival order.
+- Wheel (only while the preview is focused, so scrolling the panel never scrolls the display): `Input.dispatchMouseEvent` `type: 'mouseWheel'` at the pointer position with `deltaX`/`deltaY` passed through (clamped to ±2000).
 - Clicks outside the frame image (letterbox) are ignored.
 
 ### Keyboard
@@ -50,8 +51,8 @@ Invalid messages (unknown kind, coordinates outside 0–1, unknown key, text > 2
 
 ### Quiet kiosk
 - `install.sh` writes `/etc/chromium/policies/managed/pi-anzeige.json` (source `deploy/chromium-policy.json`):
-  `TranslateEnabled: false`, `PasswordManagerEnabled: false`, `AutofillAddressEnabled: false`, `AutofillCreditCardEnabled: false`, `DefaultNotificationsSetting: 2`, `DefaultGeolocationSetting: 2`, `DefaultBrowserSettingEnabled: false`, `BrowserSignin: 0`, `SpellcheckEnabled: false`, `MetricsReportingEnabled: false`, `PromotionalTabsEnabled: false`.
-- Chromium additionally starts with `--lang=de`.
+  `TranslateEnabled: false`, `PasswordManagerEnabled: false`, `AutofillAddressEnabled: false`, `AutofillCreditCardEnabled: false`, `DefaultNotificationsSetting: 2`, `DefaultGeolocationSetting: 2`, `DefaultBrowserSettingEnabled: false`, `BrowserSignin: 0`, `SpellcheckEnabled: false`, `MetricsReportingEnabled: false`, `PromotionalTabsEnabled: false`, `ForcedLanguages: ["de-DE", "de"]`, `AudioCaptureAllowed: false`, `VideoCaptureAllowed: false`, `DefaultClipboardSetting`/`DefaultWebUsbGuardSetting`/`DefaultSerialGuardSetting`/`DefaultWebHidGuardSetting`/`DefaultWebBluetoothGuardSetting`/`DefaultSensorsSetting`/`DefaultLocalFontsSetting`/`DefaultWindowManagementSetting`/`DefaultFileSystemWriteGuardSetting: 2`, `DownloadRestrictions: 3`. (These bubbles are browser UI: the preview cannot show them and remote input cannot dismiss them.)
+- The kiosk script exports `LANGUAGE=de` and `LANG=de_DE.UTF-8` (`--lang` is ignored on Linux).
 
 ## 3. Units
 

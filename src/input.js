@@ -41,19 +41,13 @@ export function validateInput(msg) {
 }
 
 export function createInput({ cdp }) {
-  let viewport = null;
-  cdp.on('connected', () => { viewport = null; });
-
-  async function size() {
-    if (!viewport) {
-      const { cssLayoutViewport } = await cdp.send('Page.getLayoutMetrics');
-      viewport = { width: cssLayoutViewport.clientWidth, height: cssLayoutViewport.clientHeight };
-    }
-    return viewport;
-  }
-
+  // Measured per pointer event: innerWidth/innerHeight include the scrollbar, like the
+  // screencast image the operator clicked on, and a cache would go stale on resize.
   async function point(msg) {
-    const { width, height } = await size();
+    const { result } = await cdp.send('Runtime.evaluate', {
+      expression: '[innerWidth, innerHeight]', returnByValue: true,
+    });
+    const [width, height] = result.value;
     return { x: Math.round(msg.x * (width - 1)), y: Math.round(msg.y * (height - 1)) };
   }
 
@@ -79,17 +73,16 @@ export function createInput({ cdp }) {
     }
   }
 
+  // One queue: text typed right after a click must not overtake the click.
+  let chain = Promise.resolve();
+
   return {
-    async handle(msg) {
+    handle(msg) {
       const m = validateInput(msg);
-      if (!m || !cdp.connected) return false;
-      try {
-        await dispatch(m);
-        return true;
-      } catch {
-        viewport = null; // a resize or reconnect may have made the cached size stale
-        return false;
-      }
+      if (!m || !cdp.connected) return Promise.resolve(false);
+      const run = chain.then(() => dispatch(m)).then(() => true, () => false);
+      chain = run;
+      return run;
     },
   };
 }
