@@ -79,7 +79,7 @@ export function hostAllowed(hostHeader, hostname) {
   return ['localhost', own, `${own}.local`].includes(host);
 }
 
-export function createServer({ store, display, preview, publicDir, pingInterval = 15000, info = () => ({}), hostname = 'anzeige' }) {
+export function createServer({ store, display, preview, publicDir, pingInterval = 15000, info = () => ({}), hostname = 'anzeige', input = null }) {
   const root = resolve(publicDir);
   const snapshot = () => ({ state: store.get(), display: display.status() });
 
@@ -215,6 +215,13 @@ export function createServer({ store, display, preview, publicDir, pingInterval 
       try {
         msg = JSON.parse(data.toString());
       } catch {
+        return;
+      }
+      if (msg?.type === 'input') {
+        if (!input) return;
+        input.handle(msg)
+          .then((done) => { if (done) preview.boost(); })
+          .catch((err) => console.warn(`input: ${err.message}`));
         return;
       }
       if (msg?.type !== 'preview') return;

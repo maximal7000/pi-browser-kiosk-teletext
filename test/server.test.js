@@ -33,6 +33,8 @@ async function start(opts = {}) {
   const store = await createStore({ file: join(dir, 'config.json') });
   const display = fakeDisplay();
   const preview = fakePreview();
+  preview.boosts = 0;
+  preview.boost = () => { preview.boosts += 1; };
   const server = createServer({ store, display, preview, publicDir, ...opts });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   cleanups.push(() => new Promise((r) => { server.closeAllConnections?.(); server.close(r); }));
@@ -258,4 +260,47 @@ test('websocket connections from another origin are refused', async () => {
   assert.equal(res.statusCode, 403);
   const { ws } = openWs(base, { headers: { Origin: base } });
   await once(ws, 'open');
+});
+
+function fakeInput(result = true) {
+  const input = { messages: [] };
+  input.handle = async (msg) => {
+    input.messages.push(msg);
+    if (result === 'throw') throw new Error('boom');
+    return result;
+  };
+  return input;
+}
+
+test('input messages are forwarded and boost the preview', async () => {
+  const input = fakeInput(true);
+  const { base, preview } = await start({ input });
+  const { ws } = openWs(base);
+  await once(ws, 'open');
+  ws.send(JSON.stringify({ type: 'input', kind: 'click', x: 0.5, y: 0.5 }));
+  await waitFor(() => preview.boosts === 1, 'boost');
+  assert.deepEqual(input.messages, [{ type: 'input', kind: 'click', x: 0.5, y: 0.5 }]);
+});
+
+test('dropped input does not boost', async () => {
+  const input = fakeInput(false);
+  const { base, preview } = await start({ input });
+  const { ws } = openWs(base);
+  await once(ws, 'open');
+  ws.send(JSON.stringify({ type: 'input' }));
+  await waitFor(() => input.messages.length === 1, 'handled');
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(preview.boosts, 0);
+});
+
+test('a throwing input handler keeps the socket open', async () => {
+  const input = fakeInput('throw');
+  const { base, api } = await start({ input });
+  const { ws, messages } = openWs(base);
+  await once(ws, 'open');
+  ws.send(JSON.stringify({ type: 'input', kind: 'text', text: 'x' }));
+  await waitFor(() => input.messages.length === 1, 'handled');
+  await api('PUT', '/api/black', { black: true });
+  await waitFor(() => messages.some((m) => m.state?.black === true), 'still receiving');
+  assert.equal(ws.readyState, ws.OPEN);
 });

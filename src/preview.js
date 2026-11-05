@@ -1,7 +1,9 @@
 // Streams screencast frames to control panels, and only while someone watches.
-export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60, retryDelay = 500, retries = 10 }) {
+export function createPreview({ cdp, maxFps = 2, boostFps = 5, maxWidth = 960, quality = 60, retryDelay = 500, retries = 10 }) {
   const viewers = new Map();
-  const interval = 1000 / maxFps;
+  let boostUntil = 0;
+  // Faster frames for a while after remote input, so the operator sees what they do.
+  const interval = () => 1000 / (Date.now() < boostUntil ? boostFps : maxFps);
   let lastFrame = null;
   let lastSentAt = 0;
   let pending = null;
@@ -63,7 +65,7 @@ export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60, r
     const buf = Buffer.from(data, 'base64');
     lastFrame = buf;
     api.lastFrameAt = Date.now();
-    const wait = lastSentAt + interval - Date.now();
+    const wait = lastSentAt + interval() - Date.now();
     if (viewers.size === 0 || (wait <= 0 && !trailingTimer)) {
       if (viewers.size > 0) broadcast(buf);
       ack(sessionId);
@@ -99,5 +101,8 @@ export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60, r
       if (viewers.size === 0) stop();
     },
     viewerCount: () => viewers.size,
+    boost(ms = 10000) {
+      boostUntil = Date.now() + ms;
+    },
   });
 }
