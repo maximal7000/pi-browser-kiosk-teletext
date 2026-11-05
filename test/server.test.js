@@ -202,3 +202,9 @@ test('writes require a JSON content type (blocks cross-site form posts)', async 
   assert.equal(store.get().black, false);
   assert.equal(store.get().pages.length, 0);
 });
+
+test('GET /api/info returns what the info function gives', async () => {
+  const { api } = await start({ info: () => ({ hostname: 'anzeige', addresses: ['192.168.1.20'] }) });
+  const res = await api('GET', '/api/info');
+  assert.deepEqual(res.body, { hostname: 'anzeige', addresses: ['192.168.1.20'] });
+});

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi-Anzeige</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+@font-face { font-family: "Bedstead"; src: url("/fonts/bedstead.otf") format("opentype"); font-display: block; }
+:root { color-scheme: dark; --ink: #000; --white: #f1f1ee; --yellow: #ffe417; --cyan: #2ee6e6; --green: #2bd94a; --dim: #a9a9a3; }
+html, body { margin: 0; height: 100%; background: var(--ink); color: var(--white); font-family: "Bedstead", "Courier New", monospace; cursor: none; overflow: hidden; }
+.page { height: 100%; display: grid; grid-template-rows: auto 1fr auto; padding: 3vw 4vw; box-sizing: border-box; }
+.head { display: flex; gap: 3vw; font-size: 2.4vw; align-items: baseline; }
+.head .p { color: var(--white); }
+.head .brand { color: var(--cyan); }
+.head .clock { margin-left: auto; color: var(--yellow); font-variant-numeric: tabular-nums; }
+.body { align-self: center; display: grid; gap: 2.4vw; }
+.label { color: var(--cyan); font-size: 2.2vw; }
+.big { font-size: 5.2vw; color: var(--yellow); line-height: 1.1; }
+.addr { font-size: 3vw; color: var(--white); }
+.foot { color: var(--dim); font-size: 1.6vw; }
+canvas { width: 100%; height: 1.2vw; display: block; margin-top: 1.2vw; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div>
+    <div class="head"><span class="p">P100</span><span class="brand">PI-ANZEIGE</span><span class="clock" id="clock"></span></div>
+    <canvas id="mosaic" aria-hidden="true"></canvas>
+  </div>
+  <div class="body">
+    <div class="label">STEUERUNG IM BROWSER</div>
+    <div class="big" id="host">http://anzeige.local</div>
+    <div class="addr" id="addr"></div>
+  </div>
+  <div class="foot">Noch keine Seite ausgewählt.</div>
+</div>
+<script>
+  const two = (n) => String(n).padStart(2, '0');
+  const tick = () => { const d = new Date(); document.getElementById('clock').textContent = `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`; };
+  setInterval(tick, 1000); tick();
+  fetch('/api/info').then((r) => r.json()).then(({ hostname, addresses }) => {
+    if (hostname) document.getElementById('host').textContent = `http://${hostname}.local`;
+    if (addresses?.length) document.getElementById('addr').textContent = `oder http://${addresses[0]}`;
+  }).catch(() => {});
+  const c = document.getElementById('mosaic'); const w = c.clientWidth, h = c.clientHeight;
+  c.width = w; c.height = h; const g = c.getContext('2d');
+  const cols = ['#ff3b30', '#2bd94a', '#ffe417', '#2f5bff', '#f04ae8', '#2ee6e6', '#f1f1ee'];
+  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647; const cell = h;
+  for (let x = 0, i = 0; x < w; x += cell, i++) {
+    g.fillStyle = cols[Math.floor(i / 6) % cols.length];
+    for (let sy = 0; sy < 2; sy++) for (let sx = 0; sx < 2; sx++) if (rnd() > 0.55) g.fillRect(x + sx * cell / 2, sy * h / 2, cell / 2, h / 2);
+  }
+</script>
+</body>
+</html>
