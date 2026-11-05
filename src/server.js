@@ -63,7 +63,23 @@ function readBody(req) {
   });
 }
 
-export function createServer({ store, display, preview, publicDir, pingInterval = 15000, info = () => ({}) }) {
+// Only names that can belong to this Pi: its own host name, localhost and IP literals.
+// Anything else is a DNS-rebinding attempt from a foreign website.
+export function hostAllowed(hostHeader, hostname) {
+  if (!hostHeader) return false;
+  let host;
+  try {
+    host = new URL(`http://${hostHeader}`).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (host.startsWith('[')) return true; // IPv6 literal
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+  const own = String(hostname ?? '').toLowerCase();
+  return ['localhost', own, `${own}.local`].includes(host);
+}
+
+export function createServer({ store, display, preview, publicDir, pingInterval = 15000, info = () => ({}), hostname = 'anzeige' }) {
   const root = resolve(publicDir);
   const snapshot = () => ({ state: store.get(), display: display.status() });
 
@@ -140,12 +156,39 @@ export function createServer({ store, display, preview, publicDir, pingInterval 
   }
 
   const server = http.createServer((req, res) => {
-    const { pathname } = new URL(req.url, 'http://localhost');
+    let pathname;
+    try {
+      ({ pathname } = new URL(req.url, 'http://localhost'));
+    } catch {
+      sendJson(res, 400, { error: 'Ungültige Anfrage.' });
+      return;
+    }
+    if (!hostAllowed(req.headers.host, hostname)) {
+      sendJson(res, 403, { error: 'Zugriff verweigert.' });
+      return;
+    }
     if (pathname.startsWith('/api/')) handleApi(req, res, pathname);
     else handleStatic(req, res, pathname);
   });
 
-  const wss = new WebSocketServer({ server, path: '/live', maxPayload: 4096 });
+  const wss = new WebSocketServer({
+    server,
+    path: '/live',
+    maxPayload: 4096,
+    // Browsers allow cross-origin WebSockets, so another website must not watch the screen.
+    verifyClient: ({ req }, done) => {
+      let ok = hostAllowed(req.headers.host, hostname);
+      const origin = req.headers.origin;
+      if (ok && origin) {
+        try {
+          ok = new URL(origin).host === req.headers.host;
+        } catch {
+          ok = false;
+        }
+      }
+      done(ok, 403, 'Forbidden');
+    },
+  });
   const clients = new Set();
 
   function broadcast() {

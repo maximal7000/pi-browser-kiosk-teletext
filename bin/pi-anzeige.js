@@ -27,7 +27,7 @@ const store = await createStore({ file: DATA });
 const cdp = new Cdp({ host: CDP_HOST, port: CDP_PORT });
 const display = createDisplay({ cdp, store, startUrl: `http://127.0.0.1:${PORT}/start` });
 const preview = createPreview({ cdp });
-const server = createServer({ store, display, preview, publicDir, info });
+const server = createServer({ store, display, preview, publicDir, info, hostname: hostname() });
 
 cdp.on('connected', () => console.log('chromium connected'));
 cdp.on('disconnected', () => console.log('chromium disconnected, reconnecting'));

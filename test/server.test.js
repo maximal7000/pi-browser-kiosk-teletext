@@ -208,3 +208,54 @@ test('GET /api/info returns what the info function gives', async () => {
   const res = await api('GET', '/api/info');
   assert.deepEqual(res.body, { hostname: 'anzeige', addresses: ['192.168.1.20'] });
 });
+
+import net from 'node:net';
+import httpModule from 'node:http';
+
+function rawRequest(port, text) {
+  return new Promise((resolve, reject) => {
+    const sock = net.connect(port, '127.0.0.1', () => sock.write(text));
+    let data = '';
+    sock.on('data', (d) => { data += d; });
+    sock.on('end', () => resolve(data));
+    sock.on('error', reject);
+    setTimeout(() => { sock.destroy(); resolve(data); }, 1000);
+  });
+}
+
+function requestWithHost(base, path, host, extra = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(base + path);
+    const req = httpModule.request({ host: u.hostname, port: u.port, path, method: extra.method ?? 'GET', headers: { Host: host, ...(extra.headers ?? {}) } }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    req.end(extra.body);
+  });
+}
+
+test('a malformed request line does not crash the server', async () => {
+  const { server, api } = await start();
+  const reply = await rawRequest(server.address().port, 'GET http://[ HTTP/1.1\r\nHost: localhost\r\n\r\n');
+  assert.match(reply, /^HTTP\/1\.1 400/);
+  assert.equal((await api('GET', '/api/state')).status, 200);
+});
+
+test('requests for a foreign host name are refused (DNS rebinding)', async () => {
+  const { base } = await start({ hostname: 'anzeige' });
+  assert.equal(await requestWithHost(base, '/api/state', 'evil.example'), 403);
+  assert.equal(await requestWithHost(base, '/api/state', 'evil.example:80'), 403);
+  for (const ok of ['anzeige', 'anzeige.local', 'anzeige.local:80', 'localhost:8080', '127.0.0.1', '192.168.1.20', '[::1]:80']) {
+    assert.equal(await requestWithHost(base, '/api/state', ok), 200, ok);
+  }
+});
+
+test('websocket connections from another origin are refused', async () => {
+  const { base } = await start({ hostname: 'anzeige' });
+  const evil = new WebSocket(base.replace('http', 'ws') + '/live', { headers: { Origin: 'http://evil.example' } });
+  const [, res] = await once(evil, 'unexpected-response');
+  assert.equal(res.statusCode, 403);
+  const { ws } = openWs(base, { headers: { Origin: base } });
+  await once(ws, 'open');
+});
