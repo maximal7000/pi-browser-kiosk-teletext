@@ -1,5 +1,5 @@
 // Streams screencast frames to control panels, and only while someone watches.
-export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60 }) {
+export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60, retryDelay = 500, retries = 10 }) {
   const viewers = new Map();
   const interval = 1000 / maxFps;
   let lastFrame = null;
@@ -14,13 +14,10 @@ export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60 })
 
   // Chromium only sends screencast frames when something repaints, so a static
   // page would leave the preview empty; a one-off screenshot fills that gap.
+  // No clip/scale: a scaled capture makes a visible Chromium briefly redraw the
+  // page shrunk into the top-left corner of the real screen.
   async function seed(gen) {
-    const { cssLayoutViewport } = await cdp.send('Page.getLayoutMetrics');
-    const { clientWidth: width, clientHeight: height } = cssLayoutViewport;
-    const scale = Math.min(1, maxWidth / width);
-    const { data } = await cdp.send('Page.captureScreenshot', {
-      format: 'jpeg', quality, clip: { x: 0, y: 0, width, height, scale },
-    });
+    const { data } = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality });
     if (gen !== generation || viewers.size === 0) return;
     const buf = Buffer.from(data, 'base64');
     lastFrame = buf;
@@ -28,11 +25,18 @@ export function createPreview({ cdp, maxFps = 2, maxWidth = 960, quality = 60 })
     broadcast(buf);
   }
 
-  function start() {
-    if (!cdp.connected) return;
+  // Chromium refuses both calls while a navigation is committing
+  // ("Not attached to an active page"), so try again shortly.
+  function start(attempt = 0) {
+    if (!cdp.connected || viewers.size === 0) return;
     const gen = ++generation;
-    cdp.send('Page.startScreencast', { format: 'jpeg', quality, maxWidth, everyNthFrame: 1 }).catch(warn);
-    seed(gen).catch(warn);
+    const retry = (err) => {
+      if (attempt >= retries || gen !== generation) return warn(err);
+      setTimeout(() => { if (gen === generation) start(attempt + 1); }, retryDelay);
+    };
+    cdp.send('Page.startScreencast', { format: 'jpeg', quality, maxWidth, everyNthFrame: 1 })
+      .then(() => seed(gen))
+      .catch(retry);
   }
 
   function stop() {

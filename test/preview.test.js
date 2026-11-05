@@ -45,7 +45,7 @@ test('screencast starts with the first viewer and stops with the last', async ()
   assert.equal(preview.viewerCount(), 0);
 });
 
-test('starting the preview sends a seed screenshot scaled to maxWidth', async () => {
+test('starting the preview sends a seed screenshot that does not resize the screen', async () => {
   const cdp = fakeCdp();
   const preview = createPreview({ cdp });
   const got = [];
@@ -54,7 +54,9 @@ test('starting the preview sends a seed screenshot scaled to maxWidth', async ()
   const shot = cdp.calls.find((c) => c.method === 'Page.captureScreenshot');
   assert.equal(shot.params.format, 'jpeg');
   assert.equal(shot.params.quality, 60);
-  assert.equal(shot.params.clip.scale, 0.5);
+  // A scaled clip makes a visible Chromium briefly redraw the page shrunk into
+  // the top-left corner of the real screen (reproduced under Xvfb).
+  assert.equal(shot.params.clip, undefined);
   assert.deepEqual(got, ['seed']);
 });
 
@@ -135,4 +137,23 @@ test('real Chromium delivers JPEG frames to a viewer', async () => {
   assert.equal(buf[0], 0xff);
   assert.equal(buf[1], 0xd8);
   preview.removeViewer('a');
+});
+
+test('a screencast start refused mid-navigation is retried', async () => {
+  const cdp = fakeCdp();
+  const send = cdp.send;
+  let refusals = 2;
+  cdp.send = async (method, params) => {
+    if ((method === 'Page.startScreencast' || method === 'Page.captureScreenshot') && refusals-- > 0) {
+      cdp.calls.push({ method, params });
+      throw new Error(`${method}: Not attached to an active page`);
+    }
+    return send(method, params);
+  };
+  const preview = createPreview({ cdp, retryDelay: 50 });
+  const got = [];
+  preview.addViewer('a', (buf) => got.push(buf.toString()));
+  await sleep(300);
+  assert.ok(cdp.count('Page.startScreencast') >= 2, 'screencast start retried');
+  assert.deepEqual(got, ['seed']);
 });
