@@ -196,3 +196,14 @@ test('choosing the shown page again brings it back after the site navigated away
   await store.show({ pageId: page.id });
   await waitFor(async () => (await evaluate(cdp, 'document.body.textContent')) === 'white', { label: 'back to white' });
 });
+
+test('the mouse cursor is hidden on every shown page, also after navigation', async () => {
+  const { store, cdp, display } = await setup();
+  await waitFor(() => display.status().connected, { label: 'connected' });
+  await store.show({ url: WHITE });
+  await waitFor(async () => (await evaluate(cdp, 'document.body.textContent')) === 'white', { label: 'white' });
+  await waitFor(async () => (await evaluate(cdp, 'getComputedStyle(document.body).cursor')) === 'none', { label: 'cursor hidden' });
+  await store.show({ url: OTHER });
+  await waitFor(async () => (await evaluate(cdp, 'document.body.textContent')) === 'other', { label: 'other' });
+  await waitFor(async () => (await evaluate(cdp, 'getComputedStyle(document.body).cursor')) === 'none', { label: 'cursor hidden after navigation' });
+});
